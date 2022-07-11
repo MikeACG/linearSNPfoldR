@@ -1,0 +1,14 @@
+Package: linearSNPfoldR
+Title: Estimate the Effect of Single Nucleotide Polymorphisms in Ribonucleic Acid Secondary Structure
+Version: 0.0.0.9000
+Imports:
+    data.table (>= 1.14.2)
+Authors@R: 
+    person("Miguel", "Cortes-Guzman", , "A01270966@exatec.tec.mx", role = c("aut", "cre"),
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: To be written.
+License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
+    license
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.0

@@ -141,7 +141,7 @@ SNPfoldR <- function(rnaDir, bppFilesName) {
 
     # organize results sorted by position of change and A, C, G, U order
     changeTo <- gsub(".*[0-9]", "", rnaMuts)
-    SNPfoldDt <- data.table(RNA_Change = rnaMuts, PCC = pccs, Change_Index = rnaChangePos, Change_To = changeTo)
+    SNPfoldDt <- data.table::data.table(RNA_Change = rnaMuts, PCC = pccs, Change_Index = rnaChangePos, Change_To = changeTo)
     SNPfoldDt <- SNPfoldDt[order(SNPfoldDt$Change_Index, SNPfoldDt$Change_To), ]
 
     return(SNPfoldDt)

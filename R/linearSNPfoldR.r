@@ -65,8 +65,23 @@ getRNAchanges <- function(rna) {
 file2bppMat <- function(bppFile, n) {
 
     bppMat <- matrix(0, nrow = n, ncol = n)
-    bpps <- setNames(data.table::fread(bppFile, colClasses = c("integer", "integer", "numeric")), c("nuc1", "nuc2", "bpp"))
 
+    # read the base pairing probabilities file according to format
+    cmd <- makeDecompressCmd(bppFile)
+    if (cmd == "notCompressed") {
+
+        bpps <- try(setNames(data.table::fread(bppFile, colClasses = c("integer", "integer", "numeric")), c("nuc1", "nuc2", "bpp")), silent = TRUE)
+
+    } else {
+
+        bpps <- try(setNames(data.table::fread(cmd = cmd, colClasses = c("integer", "integer", "numeric")), c("nuc1", "nuc2", "bpp")), silent = TRUE)
+
+    }
+
+    # if file reading fails (e.g. Folding has no non-zero probabilities, this happens for sure when seq length is 1) return zeros matrix
+    if (class(bpps)[1] == "try-error") return(bppMat)
+
+    # fill in the non-zero pairing probabilities
     for (j in 1:nrow(bpps)) {
 
         nuc1 <- bpps$nuc1[j]
@@ -79,6 +94,14 @@ file2bppMat <- function(bppFile, n) {
 
 }
 
+makeDecompressCmd <- function(fileName) {
+
+    if (grepl(".xz$", fileName)) return(paste("xz -dc", fileName))
+
+    return("notCompressed")
+
+}
+
 #' @export
 halvorsenPCC <- function(X, Y) {
 
@@ -86,8 +109,41 @@ halvorsenPCC <- function(X, Y) {
     y <- apply(Y, 2, sum)
 
     bothNonzero <- x > 0 & y > 0
+    if (sum(bothNonzero) == 0) return(1)
     pcc <- cor(x[bothNonzero], y[bothNonzero], method = "pearson")
 
     return(pcc) 
+
+}
+
+#' @export
+SNPfoldR <- function(rnaDir, bppFilesName) {
+
+    # get paths to directories with mutated foldings
+    rnaDirFiles <- list.files(rnaDir)
+    rnaMutBatchDirs <- paste0(rnaDir, rnaDirFiles[grep("batch", rnaDirFiles)], "/")
+    rnaMutDirs <- lapply(rnaMutBatchDirs, list.files)
+    rnaMutPaths <- unlist(mapply(function(b, m) paste0(b, m, "/", bppFilesName), 
+        rnaMutBatchDirs, rnaMutDirs, SIMPLIFY = FALSE
+    ))
+
+    # get sequence length from the mutations information
+    rnaMuts <- unlist(rnaMutDirs)
+    rnaChangePos <- as.integer(gsub("^[A-Z]|[A-Z]$", "", rnaMuts))
+    n <- max(rnaChangePos)
+
+    # load wild type bpps
+    bppFileWt <- paste0(rnaDir, "WT/", bppFilesName)
+    bppWt <- file2bppMat(bppFileWt, n)
+
+    # compute PCC for each possible RNA change against wild type
+    pccs <- sapply(rnaMutPaths, function(f) halvorsenPCC(bppWt, file2bppMat(f, n)))
+
+    # organize results sorted by position of change and A, C, G, U order
+    changeTo <- gsub(".*[0-9]", "", rnaMuts)
+    SNPfoldDt <- data.table(RNA_Change = rnaMuts, PCC = pccs, Change_Index = rnaChangePos, Change_To = changeTo)
+    SNPfoldDt <- SNPfoldDt[order(SNPfoldDt$Change_Index, SNPfoldDt$Change_To), ]
+
+    return(SNPfoldDt)
 
 }

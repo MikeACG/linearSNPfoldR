@@ -87,6 +87,7 @@ file2bppMat <- function(bppFile, n) {
         nuc1 <- bpps$nuc1[j]
         nuc2 <- bpps$nuc2[j]
         bppMat[nuc1, nuc2] <- bpps$bpp[j]
+        bppMat[nuc2, nuc1] <- bpps$bpp[j]
 
     }
 
@@ -108,9 +109,8 @@ halvorsenPCC <- function(X, Y) {
     x <- apply(X, 2, sum)
     y <- apply(Y, 2, sum)
 
-    bothNonzero <- x > 0 & y > 0
-    if (sum(bothNonzero) == 0) return(1)
-    pcc <- cor(x[bothNonzero], y[bothNonzero], method = "pearson")
+    pcc <- cor(x, y, method = "pearson")
+    if(is.na(pcc)) pcc <- 1
 
     return(pcc) 
 

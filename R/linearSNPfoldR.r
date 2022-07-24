@@ -64,6 +64,7 @@ getRNAchanges <- function(rna) {
 #' @export
 file2bppMat <- function(bppFile, n) {
 
+    if (!file.exists(bppFile)) stop("ERROR file does not exist")
     bppMat <- matrix(0, nrow = n, ncol = n)
 
     # read the base pairing probabilities file according to format

@@ -82,17 +82,22 @@ mut2folder <- function(muts, granularity) {
 }
 
 #' @export
-makeAll2foldFile <- function(trsRNA, trsEnsembl, all2foldFilePath) {
+makeAll2foldFile <- function(trsRNA, trsId, all2foldFilePath) {
 
     maxTrsPerFolder <- 1000
     maxMutsPerFolder <- 500
     if (file.exists(all2foldFilePath)) unlink(all2foldFilePath)
     file.create(all2foldFilePath)
+    organize <- TRUE
+    if (!all(grepl("^ENS", trsId))) {
+        warning("not all IDs provided seem to be ensembl, all sequences folders will be in the same folder")
+        organize <- FALSE
+    }
 
     # drop missing values
     isValid <- !is.na(trsRNA)
     trsRNA <- trsRNA[isValid]
-    trsEnsembl <- trsEnsembl[isValid]
+    trsId <- trsId[isValid]
 
     ntrs <- length(trsRNA)
     for (i in 1:ntrs) {
@@ -103,19 +108,21 @@ makeAll2foldFile <- function(trsRNA, trsEnsembl, all2foldFilePath) {
         pMutRNAs <- getMutRNAs(trsRNA[i], pRNAchanges)
         foldDt <- data.table::data.table(mut = pRNAchanges, rna = pMutRNAs)
 
-        foldDt$ensembl <- trsEnsembl[i]
-        foldDt$trdir <- ensembl2folder(trsEnsembl[i], maxTrsPerFolder)
+        foldDt$id <- trsId[i]
+        foldDt$trdir <- ""
+        if (organize) foldDt$trdir <- ensembl2folder(trsId[i], maxTrsPerFolder)
         foldDt$mutdir <- mut2folder(foldDt$mut, maxMutsPerFolder)
-        foldDt$path <- paste0(foldDt$trdir, foldDt$ensembl, "/", foldDt$mutdir, foldDt$mut, "/")
+        foldDt$path <- paste0(foldDt$trdir, foldDt$id, "/", foldDt$mutdir, foldDt$mut, "/")
 
         # add wild type in its own folder
         foldDt <- rbind(data.table::data.table(mut = "WT", rna = trsRNA[i], 
-            ensembl = trsEnsembl[i], trdir = foldDt$trdir[1], mutdir = "WT/",
-            path = paste0(foldDt$trdir[1], trsEnsembl[i], "/", "WT/")
+            id = trsId[i], trdir = foldDt$trdir[1], mutdir = "WT/",
+            path = paste0(foldDt$trdir[1], trsId[i], "/", "WT/")
         ), foldDt)
 
+        foldDt$trdir[foldDt$trdir == ""] <- NA
         data.table::fwrite(foldDt, all2foldFilePath, sep = "\t", col.names = FALSE, 
-            quote = FALSE, append = TRUE
+            quote = FALSE, append = TRUE, na = "NA"
         )
 
     }

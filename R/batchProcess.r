@@ -51,76 +51,63 @@ computeTime <- function(rnas) {
     t1 <- (rnaLens * m) / l
 
     # each sequence must be folded 3n + 1 times
-    t2 <- t1 * ((3 * rnaLens) + rnaLens)
+    t2 <- t1 * ((3 * rnaLens) + 1)
 
     # output total time in hours
     return(sum(t2) / 60)
 
 }
 
-ensembl2folder <- function(id, granularity) {
+trIndex2batchDirs <- function(trIndex, trsLength) {
 
-    ensPrefix <- gsub("[0-9]*", "", id)
-    nid <- as.numeric(gsub("ENS.", "", id)) # trim letters and leading zeros
-    rnid <- format(nid - (nid %% granularity), scientific = FALSE) # floor to nearest granularity multiple
-    n <- nchar(rnid) # n of numbers in the id (without leading zeros)
-    pad <- paste(rep("0", pmax(11, n) - n), collapse = '') # number of leading zeros, have to complete eleven numbers at least
-    ll <- paste0(ensPrefix, pad, rnid) # lower limit (inclusive) of folder
-    ul <- paste0(ensPrefix, pad, as.numeric(rnid) + (granularity - 1)) # upper limit of folder (non-inclusive)
-    
-    return(paste0(ll, "_", ul, "/"))
+    maxFilesPerDir <- 25000
 
-}
+    # get the amount of results that have to be saved for this transcript
+    nresults <- (trsLength[trIndex] * 3) + 1
 
-mut2folder <- function(muts, granularity) {
+    # compute the amount of results that were stored before results for this transcript
+    accResults <- 0
+    if (trIndex > 1) {
 
-    mutsSplit <- split(muts, ceiling(seq_along(muts) / granularity))
-    dirs <- rep(paste0("batch", 1:length(mutsSplit), "/"), sapply(mutsSplit, length))
+        beforeLengths <- trsLength[1:(trIndex - 1)]
+        accResults <- sum((beforeLengths * 3) + 1)
 
-    return(dirs)
+    }
+
+    # get the corresponding batch folder for each of the results of this transcript
+    resultsIdxs <- (accResults + 1):(accResults + nresults)
+    batchDirs <- paste0("batch", ceiling(resultsIdxs / maxFilesPerDir), "/")
+
+    return(batchDirs)
 
 }
 
 #' @export
 makeAll2foldFile <- function(trsRNA, trsId, all2foldFilePath) {
 
-    maxTrsPerFolder <- 1000
-    maxMutsPerFolder <- 500
     if (file.exists(all2foldFilePath)) unlink(all2foldFilePath)
     file.create(all2foldFilePath)
-    organize <- TRUE
-    if (!all(grepl("^ENS", trsId))) {
-        warning("not all IDs provided seem to be ensembl, all sequences folders will be in the same folder")
-        organize <- FALSE
-    }
 
     # drop missing values
     isValid <- !is.na(trsRNA)
     trsRNA <- trsRNA[isValid]
     trsId <- trsId[isValid]
 
+    trsLength <- sapply(trsRNA, nchar)
     ntrs <- length(trsRNA)
     for (i in 1:ntrs) {
 
         if (i %% 100 == 0) cat(paste0(i, "/", ntrs, "...\n"))
 
-        pRNAchanges <- getRNAchanges(trsRNA[i])
-        pMutRNAs <- getMutRNAs(trsRNA[i], pRNAchanges)
+        pRNAchanges <- c("WT", getRNAchanges(trsRNA[i]))
+        pMutRNAs <- c(trsRNA[i], getMutRNAs(trsRNA[i], pRNAchanges[-1]))
         foldDt <- data.table::data.table(mut = pRNAchanges, rna = pMutRNAs)
 
         foldDt$id <- trsId[i]
-        foldDt$trdir <- ""
-        if (organize) foldDt$trdir <- ensembl2folder(trsId[i], maxTrsPerFolder)
-        foldDt$mutdir <- mut2folder(foldDt$mut, maxMutsPerFolder)
-        foldDt$path <- paste0(foldDt$trdir, foldDt$id, "/", foldDt$mutdir, foldDt$mut, "/")
+        foldDt$batchdir <- trIndex2batchDirs(i, trsLength)
+        foldDt$filename <- paste0(foldDt$id, "_", pRNAchanges)
+        foldDt$path <- paste0(foldDt$batchdir, foldDt$filename)
 
-        # add wild type in its own folder
-        foldDt <- rbind(data.table::data.table(mut = "WT", rna = trsRNA[i], 
-            id = trsId[i], trdir = foldDt$trdir[1], mutdir = "WT/",
-            path = paste0(foldDt$trdir[1], trsId[i], "/", "WT/")
-        ), foldDt)
-
-        foldDt$trdir[foldDt$trdir == ""] <- NA
         data.table::fwrite(foldDt, all2foldFilePath, sep = "\t", col.names = FALSE, 
             quote = FALSE, append = TRUE, na = "NA"
         )
@@ -128,3 +115,4 @@ makeAll2foldFile <- function(trsRNA, trsId, all2foldFilePath) {
     }
 
 }
+

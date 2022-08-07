@@ -1,30 +1,24 @@
 #' @export
-SNPfoldR <- function(rnaDir, bppFilesName) {
+SNPfoldR <- function(trId, trIdx, rna, trsLength, bppsDir, bppsSuffix) {
 
-    # get paths to directories with mutated foldings
-    rnaDirFiles <- list.files(rnaDir)
-    rnaMutBatchDirs <- paste0(rnaDir, rnaDirFiles[grep("batch", rnaDirFiles)], "/")
-    rnaMutDirs <- lapply(rnaMutBatchDirs, list.files)
-    rnaMutPaths <- unlist(mapply(function(b, m) paste0(b, m, "/", bppFilesName), 
-        rnaMutBatchDirs, rnaMutDirs, SIMPLIFY = FALSE
-    ))
-
-    # get sequence length from the mutations information
-    rnaMuts <- unlist(rnaMutDirs)
-    rnaChangePos <- as.integer(gsub("^[A-Z]|[A-Z]$", "", rnaMuts))
-    n <- max(rnaChangePos)
+    # infer the path to this RNA results based on the length of all rnas, and the index, name and seq of query
+    pRNAchanges <- getRNAchanges(rna)
+    changesBatchDirs <- trIndex2batchDirs(trIdx, trsLength)
+    bppsFileWt <- paste0(bppsDir, changesBatchDirs[1], trId, "_WT", bppsSuffix)
+    bppsFilesMuts <- paste0(bppsDir, changesBatchDirs[-1], trId, "_", pRNAchanges, bppsSuffix)
 
     # load wild type bpps
-    bppFileWt <- paste0(rnaDir, "WT/", bppFilesName)
-    bppWt <- file2bppMat(bppFileWt, n)
+    n <- length(pRNAchanges) / 3
+    bppsWt <- file2bppMat(bppsFileWt, n)
 
     # compute PCC for each possible RNA change against wild type
-    pccs <- sapply(rnaMutPaths, function(f) halvorsenPCC(bppWt, file2bppMat(f, n)))
+    pccs <- sapply(bppsFilesMuts, function(f) halvorsenPCC(bppsWt, file2bppMat(f, n)))
 
-    # organize results sorted by position of change and A, C, G, U order
-    changeTo <- gsub(".*[0-9]", "", rnaMuts)
-    SNPfoldDt <- data.table::data.table(RNA_Change = rnaMuts, PCC = pccs, Change_Index = rnaChangePos, Change_To = changeTo)
-    SNPfoldDt <- SNPfoldDt[order(SNPfoldDt$Change_Index, SNPfoldDt$Change_To), ]
+    # organize results, they are already sorted by position of change
+    rnaChangePos <- as.integer(gsub("^[A-Z]|[A-Z]$", "", pRNAchanges))
+    changeTo <- gsub(".*[0-9]", "", pRNAchanges)
+    SNPfoldDt <- data.table::data.table(RNA_Change = pRNAchanges, PCC = pccs, Change_Index = rnaChangePos, Change_To = changeTo)
+    #SNPfoldDt <- SNPfoldDt[order(SNPfoldDt$Change_Index, SNPfoldDt$Change_To), ]
 
     return(SNPfoldDt)
 

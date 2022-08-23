@@ -83,14 +83,8 @@ file2bppMat <- function(bppFile, n) {
     if (class(bpps)[1] == "try-error") return(bppMat)
 
     # fill in the non-zero pairing probabilities
-    for (j in 1:nrow(bpps)) {
-
-        nuc1 <- bpps$nuc1[j]
-        nuc2 <- bpps$nuc2[j]
-        bppMat[nuc1, nuc2] <- bpps$bpp[j]
-        bppMat[nuc2, nuc1] <- bpps$bpp[j]
-
-    }
+    bppMat[cbind(bpps$nuc1, bpps$nuc2)] <- bpps$bpp
+    bppMat[cbind(bpps$nuc2, bpps$nuc1)] <- bpps$bpp
 
     return(bppMat)
 
@@ -99,8 +93,8 @@ file2bppMat <- function(bppFile, n) {
 #' @export
 halvorsenPCC <- function(X, Y) {
 
-    x <- apply(X, 2, sum)
-    y <- apply(Y, 2, sum)
+    if (is.vector(X)) x <- X else x <- colSums(X)
+    y <- colSums(Y)
 
     pcc <- cor(x, y, method = "pearson")
     if(is.na(pcc)) pcc <- 1

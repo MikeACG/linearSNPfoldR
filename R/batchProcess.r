@@ -12,7 +12,8 @@ SNPfoldR <- function(trId, trIdx, rna, trsLength, bppsDir, bppsSuffix) {
     bppsWt <- file2bppMat(bppsFileWt, n)
 
     # compute PCC for each possible RNA change against wild type
-    pccs <- sapply(bppsFilesMuts, function(f) halvorsenPCC(bppsWt, file2bppMat(f, n)))
+    x <- colSums(bppsWt)
+    pccs <- sapply(bppsFilesMuts, function(f) halvorsenPCC(x, file2bppMat(f, n)))
 
     # organize results, they are already sorted by position of change
     rnaChangePos <- as.integer(gsub("^[A-Z]|[A-Z]$", "", pRNAchanges))

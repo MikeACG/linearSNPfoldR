@@ -18,10 +18,71 @@ SNPfoldR <- function(trId, trIdx, rna, trsLength, bppsDir, bppsSuffix) {
     # organize results, they are already sorted by position of change
     rnaChangePos <- as.integer(gsub("^[A-Z]|[A-Z]$", "", pRNAchanges))
     changeTo <- gsub(".*[0-9]", "", pRNAchanges)
-    SNPfoldDt <- data.table::data.table(RNA_Change = pRNAchanges, PCC = pccs, Change_Index = rnaChangePos, Change_To = changeTo)
+    wildType <- substr(pRNAchanges, 1, 1)
+    SNPfoldDt <- data.table::data.table(RNA_Change = pRNAchanges, PCC = pccs, Change_Index = rnaChangePos, Change_To = changeTo, Wild_Type = wildType)
     #SNPfoldDt <- SNPfoldDt[order(SNPfoldDt$Change_Index, SNPfoldDt$Change_To), ]
 
     return(SNPfoldDt)
+
+}
+
+plotBpps <- function(trId, trIdx, rnas, trSub, bppsDir, bppsSuffix) {
+
+    # infer the path to this RNA results based on the length of all rnas, and the index, name and seq of query
+    pRNAchanges <- c("WT", getRNAchanges(rnas[trIdx]))
+    changesBatchDirs <- linearSNPfoldR:::trIndex2batchDirs(trIdx, sapply(rnas, nchar))
+    trSubIdx <- match(trSub, pRNAchanges)
+    bppsFile <- paste0(bppsDir, changesBatchDirs[trSubIdx], trId, "_", trSub, bppsSuffix)
+
+    # load bpps matrix
+    n <- (length(pRNAchanges) - 1) / 3
+    bpps <- t(file2bppMat(bppsFile, n))
+
+    brks <- 1:(n + 1)
+    colBrks <- hist(bpps[bpps > 0], plot = FALSE)$breaks
+    if (colBrks[1] == 0) colBrks <- append(colBrks, colBrks[2], 1)
+    if (colBrks[1] != 0) colBrks <- c(0, colBrks[1], colBrks)
+    pal <- c("black", heat.colors(length(colBrks) - 2))
+    image(brks, brks, bpps, breaks = colBrks, col = pal, axes = FALSE)
+    abline(v = c(1, n + 1), h = c(1, n + 1))
+    abline(coef = c(0, 1), col = "gray85")
+
+}
+
+# this is in dev state currently
+getEnergyChanges <- function(trId, trIdx, rna, trsLength, logsDir, logsSuffix) {
+
+    # infer the path to this RNA results based on the length of all rnas, and the index, name and seq of query
+    pRNAchanges <- getRNAchanges(rna)
+    changesBatchDirs <- trIndex2batchDirs(trIdx, trsLength)
+    logsFileWt <- paste0(logsDir, changesBatchDirs[1], trId, "_WT", logsSuffix)
+    logsFilesMuts <- paste0(logsDir, changesBatchDirs[-1], trId, "_", pRNAchanges, logsSuffix)
+
+    # load wild type free energy
+    wt <- data.table::fread(logsFileWt, header = FALSE)
+    wt <- log2energy(wt$V1[1])
+
+    # compute free energy difference for each possible RNA change against wild type
+    snps <- sapply(logsFilesMuts, function(f) data.table::fread(f, header = FALSE)$V1[1])
+    snps <- log2energy(snps)
+    d <- (wt - snps) * -1
+
+    # organize results, they are already sorted by position of change
+
+    r <- structure(
+        list(
+            change = data.table::data.table(RNA_Change = pRNAchanges, Free_Energy = snps, Energy_change = d),
+            wildEnergy = wt
+        )
+    )
+
+    return(r)
+
+}
+
+log2energy <- function(s) {
+
+    as.numeric(sapply(strsplit(s, " "), function(x) x[5]))
 
 }
 
